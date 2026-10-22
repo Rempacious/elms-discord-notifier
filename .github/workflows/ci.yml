@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Syntax-check every source file
+        run: for f in src/*.js; do node --check "$f"; done
+      - name: Setup fails loudly without a webhook (no browser launched)
+        run: |
+          set +e
+          echo "" | timeout 60 node src/setup.js > out.txt 2>&1
+          cat out.txt
+          grep -q "Discord webhook URL" out.txt

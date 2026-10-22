@@ -20,7 +20,7 @@ No API key, no admin help, no email forwarding needed. It drives the website the
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/elms-discord-notifier.git
+git clone https://github.com/Rempacious/elms-discord-notifier.git
 cd elms-discord-notifier
 npm install
 npm run setup
