@@ -16,3 +16,4 @@ Thumbs.db
 .vscode/
 .node-path
 .browser-path
+digest/

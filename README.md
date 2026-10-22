@@ -62,6 +62,8 @@ npm run demo     # post the newest notification right now, as a test
 | `npm run demo` | Post the newest notification regardless of state |
 | `npm run check` | Report whether the saved session is still logged in |
 | `npm run snapshot` | Dump page HTML into `snapshots/` (for troubleshooting parser changes) |
+| `npm run digest` | Post the daily schedule digest (rendered table image) |
+| `npm run digest:preview` | Build the digest image locally without posting (`./digest/`) |
 
 ## Configuration (`​.env`)
 
@@ -93,6 +95,31 @@ The task runs `run-poll.cmd`, which logs to `logs/poll.log` (rotated at 2 MB). R
 chmod +x scripts/run-poll.sh
 crontab -e
 */10 * * * * /usr/bin/env bash /path/to/elms-discord-notifier/scripts/run-poll.sh
+```
+
+## Daily schedule digest
+
+`npm run digest` builds a **rendered table image** of the next 7 days plus every open assignment, and
+posts it with a short embed:
+
+- **Next 7 days** — day, time, course, item, status pill (`submitted` / `due`)
+- **Open work** — course, assignment, section, due date, score
+
+It reads the calendar agenda for the current *and* next week, filters to a rolling 7-day window, then
+pulls each course's unsubmitted list. Administrative surveys are skipped. Use
+`npm run digest:preview` to write the PNG to `./digest/` without posting, or `-- --text` for a plain
+monospace table instead of an image.
+
+Register it as a daily task:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-digest-task.ps1          # 07:00 daily
+powershell -ExecutionPolicy Bypass -File scripts\install-digest-task.ps1 -At 06:30
+```
+
+```bash
+# Linux/macOS
+0 7 * * * /usr/bin/env bash /path/to/elms-discord-notifier/scripts/run-digest.sh
 ```
 
 ## How it works

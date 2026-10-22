@@ -238,4 +238,24 @@ async function alertOnce(kind, text) {
   return true;
 }
 
-module.exports = { postItems, postOne, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };
+/** Post a plain-content message (used by the text-only digest). */
+async function postText(content) {
+  return send({ content, allowed_mentions: { parse: [] } });
+}
+
+/** Upload a file (image) with an accompanying embed. Embed must reference `attachment://<filename>`. */
+async function postFile(buffer, filename, embed) {
+  if (!cfg.webhook) throw new Error('DISCORD_WEBHOOK_URL is not set - run `npm run setup`');
+  const form = new FormData();
+  if (embed) form.append('payload_json', JSON.stringify({ embeds: [embed] }));
+  form.append('files[0]', new Blob([buffer], { type: 'image/png' }), filename);
+  const res = await fetch(withQuery({}), {
+    method: 'POST',
+    headers: { 'User-Agent': 'Mozilla/5.0' }, // no Content-Type: fetch sets the multipart boundary
+    body: form,
+  });
+  if (!res.ok) throw new Error(`discord upload ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return res.json();
+}
+
+module.exports = { postItems, postOne, postText, postFile, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };

@@ -14,6 +14,8 @@
     "poll": "node src/poll.js",
     "seed": "node src/poll.js --seed",
     "demo": "node src/poll.js --demo",
+    "digest": "node src/digest.js",
+    "digest:preview": "node src/digest.js --dry-run",
     "check": "node src/session.js --check",
     "snapshot": "node src/session.js --snapshot",
     "browser": "npx playwright-core install chromium"
