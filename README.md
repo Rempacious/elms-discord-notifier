@@ -99,16 +99,24 @@ crontab -e
 
 ## Daily schedule digest
 
-`npm run digest` builds a **rendered table image** of the next 7 days plus every open assignment, and
-posts it with a short embed:
+`npm run digest` posts a **native, mobile-first** digest — Components V2 cards that wrap and scale
+on a phone, with nothing to pinch-zoom:
 
-- **Next 7 days** — day, time, course, item, status pill (`submitted` / `due`)
-- **Open work** — course, assignment, section, due date, score
+- **Next 7 days** — day · time · status (`✅ submitted` / `⏳ not submitted`), then course and item
+- **Open work** — course · due date · score, then the assignment and its section
+- A button straight to your eLMS calendar
 
 It reads the calendar agenda for the current *and* next week, filters to a rolling 7-day window, then
-pulls each course's unsubmitted list. Administrative surveys are skipped. Use
-`npm run digest:preview` to write the PNG to `./digest/` without posting, or `-- --text` for a plain
-monospace table instead of an image.
+pulls each course's unsubmitted list. Administrative surveys are skipped.
+
+Variants:
+
+```bash
+npm run digest                       # native cards (default, best on mobile)
+npm run digest -- --image            # rendered PNG table (desktop-friendly, ./digest/)
+npm run digest -- --text             # monospace code-block table (copy/paste-able)
+npm run digest:preview               # print the payload without posting
+```
 
 Register it as a daily task:
 

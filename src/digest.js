@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { cfg, ensureDirs } = require('./config');
 const { openSession } = require('./browser');
-const { postFile, postText } = require('./discord');
+const { postFile, postText, postContainers } = require('./discord');
 
 const DRY = process.argv.includes('--dry-run');
 const AS_TEXT = process.argv.includes('--text');
@@ -122,6 +122,46 @@ function minutes(t) {
 
 function fmtDate(d) {
   return d ? `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()]} ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}` : '';
+}
+
+// ---------- native (mobile-first) components ----------
+function digestContainers({ schedule, work, weekLabel, generated }) {
+  const head = {
+    type: 17,
+    accent_color: 0x5865f2,
+    components: [
+      { type: 10, content: `## 📅 eLMS · ${weekLabel}` },
+      { type: 10, content: `-# ${schedule.length} dated · ${work.length} open · ${generated}` },
+      { type: 1, components: [{ type: 2, style: 5, label: 'Open calendar', url: `${cfg.baseUrl}/my_calendar` }] },
+    ],
+  };
+
+  const sched = {
+    type: 17,
+    accent_color: 0xf5a623,
+    components: [{ type: 10, content: '### ⏰ Next 7 days' }],
+  };
+  if (!schedule.length) sched.components.push({ type: 10, content: '-# nothing due — clear week 🎉' });
+  schedule.forEach((r, i) => {
+    if (i) sched.components.push({ type: 14, divider: true, spacing: 1 });
+    const status = r.status === 'done' ? '✅ submitted' : '⏳ not submitted';
+    sched.components.push({ type: 10, content: `**${r.day}** · ${r.time || '—'} · ${status}` });
+    sched.components.push({ type: 10, content: `${r.course}\n-# ${r.item}` });
+  });
+
+  const open = {
+    type: 17,
+    accent_color: 0x9b59b6,
+    components: [{ type: 10, content: '### 📋 Open work' }],
+  };
+  if (!work.length) open.components.push({ type: 10, content: '-# nothing outstanding 🎉' });
+  work.forEach((r, i) => {
+    if (i) open.components.push({ type: 14, divider: true, spacing: 1 });
+    open.components.push({ type: 10, content: `**${r.course}** · due ${r.due || '—'} · ${(r.score || '?').replace('?/', '? / ')}` });
+    open.components.push({ type: 10, content: `-# ${r.title}${r.section ? ` · ${r.section}` : ''}` });
+  });
+
+  return [head, sched, open];
 }
 
 // ---------- rendering ----------
@@ -251,6 +291,21 @@ function textTable(schedule, work) {
     if (DRY) { console.log(body); return; }
     const msg = await postText(body);
     console.log('posted text digest', msg && msg.id);
+    return;
+  }
+
+  if (!process.argv.includes('--image')) {
+    const containers = digestContainers({
+      schedule: digest.schedule, work: digest.work, weekLabel: digest.weekLabel, generated,
+    });
+    if (DRY) { console.log(JSON.stringify(containers, null, 1)); return; }
+    const msgs = await postContainers(containers);
+    console.log(JSON.stringify({
+      posted: msgs.map((m) => m && m.id),
+      events: digest.schedule.length,
+      open: digest.work.length,
+      mode: 'components',
+    }));
     return;
   }
 

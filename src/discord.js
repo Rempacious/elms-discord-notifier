@@ -258,4 +258,14 @@ async function postFile(buffer, filename, embed) {
   return res.json();
 }
 
-module.exports = { postItems, postOne, postText, postFile, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };
+/** Post arbitrary Components V2 containers (used by the digest). */
+async function postContainers(containers) {
+  const chunks = [];
+  for (let i = 0; i < containers.length; i += 8) {   // keep each message well inside the 40-component cap
+    const batch = containers.slice(i, i + 8);
+    chunks.push(await send({ flags: V2_FLAG, components: batch, allowed_mentions: { parse: [] } }, { components: true }));
+  }
+  return chunks;
+}
+
+module.exports = { postItems, postOne, postText, postFile, postContainers, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };
