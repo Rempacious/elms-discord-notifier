@@ -10,8 +10,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { cfg } = require('./config');
+const { cfg, ensureDirs } = require('./config');
 const { openSession, saveCookies, sessionState } = require('./browser');
+
+ensureDirs();
 
 const MODE = process.argv[2] || '--check';
 

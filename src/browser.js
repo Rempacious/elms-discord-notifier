@@ -91,6 +91,7 @@ async function newContext(browser) {
 
 async function saveCookies(ctx) {
   const all = await ctx.cookies();
+  fs.mkdirSync(path.dirname(cfg.cookiesFile), { recursive: true });
   fs.writeFileSync(cfg.cookiesFile, JSON.stringify(all, null, 1));
   return all.length;
 }
