@@ -1,0 +1,118 @@
+# eLMS → Discord Notifier
+
+Forward **Neo LMS / CYPHER Learning** notifications (STI eLMS, and any other Neo-based campus LMS) into a Discord channel — graded work, "due soon" reminders, announcements, points awarded, messages — as rich embeds that link straight back to the item.
+
+No API key, no admin help, no email forwarding needed. It drives the website the same way your browser does, on a schedule, and only posts what is **new** since the last check.
+
+```
+⏰ Due soon: assignment '05 Quiz 1 - ARG' in class 'Computer Graphics Programming'
+   Michael John Siquihod · eLMS · 1:39 am                    → opens the notification
+```
+
+---
+
+## Requirements
+
+- **Node.js 20+**
+- A Discord channel you can add a webhook to
+- An eLMS account (password or SSO — both work)
+
+## Quick start
+
+```bash
+git clone https://github.com/<you>/elms-discord-notifier.git
+cd elms-discord-notifier
+npm install
+npm run setup
+```
+
+That is the whole installation. `npm run setup` walks through four steps:
+
+1. **Discord webhook** — asks for the URL and posts a test message so you know it works.
+2. **Sign-in** — opens a real browser window pointed at the LMS login page. Sign in however you normally do (school SSO, Microsoft/Google, password). The script waits, detects the logged-in page, and saves the session cookies to `data/cookies.json`. **Your password is never typed into this tool — you type it into the browser.**
+3. **Seeding** — records the notifications already on the page so your channel does not get 30 messages at once.
+4. **Scheduler** — registers a Windows Scheduled Task (or prints the cron line on Linux/macOS) to poll every 10 minutes.
+
+Then:
+
+```bash
+npm start        # run one cycle by hand
+npm run demo     # post the newest notification right now, as a test
+```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run setup` | Full wizard (config → Discord test → browser sign-in → seed → scheduler) |
+| `npm run setup -- --login-only` | Only refresh the saved browser session (after a password change or session expiry) |
+| `npm start` | One poll cycle: fetch → diff → post new items |
+| `npm run seed` | Mark everything currently visible as seen, post nothing |
+| `npm run demo` | Post the newest notification regardless of state |
+| `npm run check` | Report whether the saved session is still logged in |
+| `npm run snapshot` | Dump page HTML into `snapshots/` (for troubleshooting parser changes) |
+
+## Configuration (`​.env`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `ELMS_BASE_URL` | `https://elms.sti.edu` | Any Neo LMS / CYPHER Learning site |
+| `DISCORD_WEBHOOK_URL` | — | Channel webhook (required) |
+| `DISCORD_THREAD_ID` | — | Post inside a thread instead of the channel |
+| `POLL_MINUTES` | `10` | Cadence; match it in the scheduler entry |
+| `MAX_POSTS_PER_CYCLE` | `8` | Upper bound on messages per run (burst protection) |
+| `DISCORD_BATCH_SIZE` | `5` | Embeds per Discord message (10 max) |
+| `SEEN_HISTORY` | `800` | Notification IDs remembered for de-duplication |
+| `HEADLESS` | `true` | `false` shows the browser while polling |
+
+## Scheduling
+
+**Windows** (done for you by the wizard, or manually):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1          # every POLL_MINUTES
+powershell -ExecutionPolicy Bypass -File scripts\install-task.ps1 -Minutes 5
+```
+
+The task runs `run-poll.cmd`, which logs to `logs/poll.log` (rotated at 2 MB). Registering as `SYSTEM` keeps it running with nobody logged in; the script falls back to the current user if it lacks elevation.
+
+**Linux / macOS**
+
+```bash
+chmod +x scripts/run-poll.sh
+crontab -e
+*/10 * * * * /usr/bin/env bash /path/to/elms-discord-notifier/scripts/run-poll.sh
+```
+
+## How it works
+
+- **Platform**: the target is Neo LMS (CYPHER Learning). Its REST API (`/api/v1`, `/api/v3`) requires an admin-installed app and an API key, so a student account cannot use it — this tool scrapes the notification list instead.
+- **Auth**: `data/cookies.json` holds the LMS session **and** the identity-provider cookies (Microsoft/Entra, Google, …). Those cookies let the poller renew an expired LMS session silently, with no password and no browser window.
+- **Reading**: `GET /notifications`, parse each table row (id, sender, subject, timestamp, read flag). New IDs are diffed against `data/state.json`.
+- **Posting**: embeds batched 5 per message, colour and emoji by type (⏰ due-soon, 📝 graded, 🏆 points/badges, 💬 messages, 📢 announcements), each linking to `/notifications/show?notification=<id>`.
+- **Why Playwright**: replaying the cookies through `fetch` gets a `302 → /site/not_logged_in`; the same cookies inside a real browser context are logged in. The tool uses `playwright-core` and reuses any Chromium already on the machine (Playwright's cache, Chrome, Edge, Chromium). If none is found: `npx playwright-core install chromium`.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `NOT LOGGED IN` / ⚠️ alert in Discord | `npm run setup -- --login-only` and sign in again |
+| Discord test message fails | Webhook deleted or wrong channel — create a new one |
+| `discord 429` | You are polling too often; raise `POLL_MINUTES` |
+| Task shows `Ready` but nothing posts | `tail -20 logs/poll.log`; check `npm run check` |
+| Nothing detected after a site redesign | `npm run snapshot` and compare the notification row markup with `src/notifications.js` |
+| Chromium missing | `npx playwright-core install chromium`, or set `CHROME_PATH` |
+
+## Limits and fair use
+
+- Page 1 of the notification list is read (newest ~30). If more than that arrive between two runs, the oldest of that burst can be missed — 10 minutes is deliberately conservative.
+- It never marks anything read in the LMS; posting does not touch your account state.
+- This is an unofficial client. Keep the interval sane (the site rate-limits and will return HTTP 429), do not share your `data/cookies.json` (it is a live session), and check your institution's acceptable-use policy before running automated tooling against a school system.
+
+## Privacy
+
+`.env`, `data/` and `logs/` are git-ignored. The only things that leave your machine are the notification embeds posted to the Discord webhook you configure.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

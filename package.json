@@ -1,0 +1,46 @@
+{
+  "name": "elms-discord-notifier",
+  "version": "1.0.0",
+  "description": "Forward Neo LMS / CYPHER Learning (eLMS) account notifications to Discord, on a schedule, without API keys.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "src/poll.js",
+  "bin": {
+    "elms-notify": "src/poll.js"
+  },
+  "scripts": {
+    "setup": "node src/setup.js",
+    "start": "node src/poll.js",
+    "poll": "node src/poll.js",
+    "seed": "node src/poll.js --seed",
+    "demo": "node src/poll.js --demo",
+    "check": "node src/session.js --check",
+    "snapshot": "node src/session.js --snapshot",
+    "browser": "npx playwright-core install chromium"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "elms",
+    "neolms",
+    "cypher-learning",
+    "lms",
+    "discord",
+    "webhook",
+    "notifications",
+    "playwright",
+    "sti"
+  ],
+  "files": [
+    "src",
+    "scripts",
+    "run-poll.cmd",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ]
+}

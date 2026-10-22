@@ -1,0 +1,18 @@
+# secrets and per-install state - never commit these
+.env
+data/
+logs/
+snapshots/
+*.log
+
+# dependencies
+node_modules/
+package-lock.json.bak
+
+# os / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.node-path
+.browser-path
