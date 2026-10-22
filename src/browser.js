@@ -96,7 +96,7 @@ async function saveCookies(ctx) {
   return all.length;
 }
 
-const isLoginUrl = (url) => /log_in|not_logged_in|login\.microsoftonline|accounts\.google/i.test(url || '');
+const isLoginUrl = (url) => /log_in|not_logged_in|simultaneous_logins|warning\/|login\.microsoftonline|accounts\.google/i.test(url || '');
 
 /** Open a context + page and report whether the stored session still works. */
 async function openSession({ headless = cfg.headless } = {}) {

@@ -5,9 +5,20 @@ Forward **Neo LMS / CYPHER Learning** notifications (STI eLMS, and any other Neo
 No API key, no admin help, no email forwarding needed. It drives the website the same way your browser does, on a schedule, and only posts what is **new** since the last check.
 
 ```
-⏰ Due soon: assignment '05 Quiz 1 - ARG' in class 'Computer Graphics Programming'
-   Michael John Siquihod · eLMS · 1:39 am                    → opens the notification
+╭───────────────────────────────────────────────╮
+│ ⏰ Due soon                                    │
+│ ### 05 Quiz 1 - ARG                           │
+│ -# 📚 Computer Graphics Programming - SY2627-1T│
+│ ─────────────────────────────────────────────  │
+│ Michael John Siquihod  ·  19 hours ago        │
+│ [ Open in eLMS ]                              │
+╰───────────────────────────────────────────────╯
 ```
+
+Messages use Discord's **Components V2** layout: a container with a coloured accent bar per
+notification type, a markdown heading, course subtext, `<t:…>` timestamps that render in each
+reader's own timezone, and a link button back into the item. If the target API/client rejects the
+V2 payload, it degrades to classic rich embeds automatically and remembers that choice.
 
 ---
 
@@ -106,6 +117,7 @@ crontab -e
 ## Limits and fair use
 
 - Page 1 of the notification list is read (newest ~30). If more than that arrive between two runs, the oldest of that burst can be missed — 10 minutes is deliberately conservative.
+- **The LMS allows one session per account.** Signing in on your phone or another browser kicks the bridge out, and the bridge signing back in kicks that browser out. The bridge re-authenticates silently on the next cycle, so it self-heals — but if you are actively using eLMS in a browser you will both see "logged out" notices. Do not run two copies of this tool against one account.
 - It never marks anything read in the LMS; posting does not touch your account state.
 - This is an unofficial client. Keep the interval sane (the site rate-limits and will return HTTP 429), do not share your `data/cookies.json` (it is a live session), and check your institution's acceptable-use policy before running automated tooling against a school system.
 

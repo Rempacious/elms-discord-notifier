@@ -12,10 +12,10 @@
 const { cfg, ensureDirs } = require('./config');
 const { openSession, saveCookies } = require('./browser');
 const { readNotifications, silentReauth, loadState, saveState } = require('./notifications');
-const { post, embedFor, alertOnce } = require('./discord');
+const { postItems, postOne, alertOnce } = require('./discord');
 
 const MODE = process.argv[2] || '';
-const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not restore it. Sign in once in a browser, then re-run \`npm run setup -- --login-only\` (or copy the fresh cookies into ${cfg.cookiesFile}).`;
+const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not restore it. Note that the LMS allows only ONE active session per account, so signing in on your phone or another browser logs the bridge out (and vice versa). Re-run \`npm run setup -- --login-only\`, or refresh ${cfg.cookiesFile}.`;
 
 (async () => {
   ensureDirs();
@@ -24,15 +24,28 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
 
   let result;
   let reauth = null;
+  let cookieCount = 0;
   try {
     result = await readNotifications(page);
     if (!result.loggedIn) {
       reauth = await silentReauth(page);
       result = await readNotifications(page);
+      // Neo LMS allows one session per account, so a bounce can race the previous session: retry once
+      if (!result.loggedIn) {
+        await page.waitForTimeout(2000);
+        reauth = await silentReauth(page);
+        result = await readNotifications(page);
+      }
     }
+    // never overwrite a good jar with the cookies of a logged-out page
+    if (result.loggedIn) cookieCount = await saveCookies(ctx);
   } finally {
-    try { await saveCookies(ctx); } catch { }
     await browser.close();
+  }
+
+  if (result.loggedIn && !result.tableFound) {
+    console.error('no notification table on the page - not saving cookies or state, the layout may have changed');
+    process.exit(4);
   }
 
   if (MODE === '--check') {
@@ -61,7 +74,7 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
 
   if (MODE === '--demo') {
     if (!items.length) { console.error('no notifications on page'); process.exit(1); }
-    const msg = await post({ embeds: [embedFor(items[0])] });
+    const msg = await postOne(items[0]);
     console.log('demo post id', msg && msg.id);
     state.seen = [...new Set([...items.map((i) => i.id), ...state.seen])].slice(0, cfg.keepSeen);
     state.lastPoll = new Date().toISOString();
@@ -70,12 +83,8 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
   }
 
   const budget = fresh.slice(0, cfg.maxPostsPerCycle);
-  let posted = 0;
-  for (let i = 0; i < budget.length; i += cfg.batchSize) {
-    const chunk = budget.slice(i, i + cfg.batchSize);
-    await post({ embeds: chunk.map(embedFor) });
-    posted += chunk.length;
-  }
+  await postItems(budget);
+  const posted = budget.length;
 
   state.seen = [...new Set([...items.map((i) => i.id), ...state.seen])].slice(0, cfg.keepSeen);
   state.lastPoll = new Date().toISOString();

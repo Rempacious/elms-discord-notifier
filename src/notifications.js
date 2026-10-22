@@ -18,7 +18,9 @@ async function readNotifications(page) {
   await page.goto(cfg.baseUrl + '/notifications', { waitUntil: 'domcontentloaded', timeout: cfg.timeoutMs });
   await page.waitForTimeout(1500);
   const url = page.url();
-  if (/log_in|not_logged_in/.test(url)) return { loggedIn: false, url, items: [] };
+  if (/log_in|not_logged_in|simultaneous_logins|warning\//.test(url)) {
+    return { loggedIn: false, url, items: [], reason: /simultaneous/.test(url) ? 'simultaneous_login' : 'logged_out' };
+  }
 
   const items = await page.evaluate(() => {
     const out = [];
@@ -26,19 +28,21 @@ async function readNotifications(page) {
       const m = a.getAttribute('href').match(/notification=(\d+)/);
       if (!m) continue;
       const tr = a.closest('tr');
-      const fromA = tr && tr.querySelector('td a[href^="/user/show/"]');
+      // the sender cell holds an avatar link (no text) plus a named link - take the first with text
+      const names = tr ? [...tr.querySelectorAll('td a[href^="/user/show/"]')] : [];
+      const from = names.map((n) => n.textContent.trim()).filter(Boolean)[0] || '';
       const tds = tr ? Array.from(tr.querySelectorAll('td')) : [];
       out.push({
         id: m[1],
         subject: a.textContent.trim().replace(/\s+/g, ' '),
-        from: fromA ? fromA.textContent.trim() : '',
+        from,
         time: tds.length >= 2 ? tds[tds.length - 2].innerText.trim().replace(/\s+/g, ' ') : '',
         read: !!(tr && tr.querySelector('.tick')),
       });
     }
     return out;
   });
-  return { loggedIn: true, url, items };
+  return { loggedIn: true, url, items, tableFound: await page.evaluate(() => !!document.querySelector('table')) };
 }
 
 /**

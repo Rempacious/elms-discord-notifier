@@ -1,6 +1,6 @@
 {
   "name": "elms-discord-notifier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Forward Neo LMS / CYPHER Learning (eLMS) account notifications to Discord, on a schedule, without API keys.",
   "license": "MIT",
   "type": "commonjs",
