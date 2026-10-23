@@ -99,7 +99,11 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
     at: state.lastPoll,
   }));
 })().catch(async (e) => {
+  const transient = /timeout|net::|ECONN|EAI_AGAIN|EPIPE|load failed/i.test(e.message || '');
   console.error('ERR', e.message);
-  try { await alertOnce('error', `eLMS bridge error: ${e.message}`); } catch { }
+  // transient network/timeout failures self-heal on the next 10-minute cycle - no Discord noise
+  if (!transient) {
+    try { await alertOnce('error', `eLMS bridge error: ${e.message}`); } catch { }
+  }
   process.exit(1);
 });
