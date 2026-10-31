@@ -82,7 +82,16 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
   }
 
   if (!result.loggedIn) {
-    await alertOnce('reauth', REAUTH_HINT);
+    // the single-session policy means a lapse is routine (you signed in elsewhere) - alert at most every 6h
+    const ALERT_GAP = 6 * 3600000;
+    const lastAlert = state.lastReauthAlertAt ? Date.parse(state.lastReauthAlertAt) : 0;
+    if (Date.now() - lastAlert > ALERT_GAP) {
+      await alertOnce('reauth', REAUTH_HINT);
+      state.lastReauthAlertAt = new Date().toISOString();
+      saveState(state);
+    } else {
+      console.error('not logged in - already alerted recently, staying quiet');
+    }
     console.error('NOT LOGGED IN ->', result.url);
     process.exit(3);
   }
@@ -140,7 +149,7 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
     at: state.lastPoll,
   }));
 })().catch(async (e) => {
-  const transient = /timeout|net::|ECONN|EAI_AGAIN|EPIPE|load failed/i.test(e.message || '');
+  const transient = /timeout|net::|ECONN|EAI_AGAIN|EPIPE|load failed|interrupted by another navigation|navigation to .* is interrupted/i.test(e.message || '');
   console.error('ERR', e.message);
   // transient network/timeout failures self-heal on the next 10-minute cycle - no Discord noise
   if (!transient) {
