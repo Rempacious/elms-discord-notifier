@@ -130,6 +130,31 @@ powershell -ExecutionPolicy Bypass -File scripts\install-digest-task.ps1 -At 06:
 0 7 * * * /usr/bin/env bash /path/to/elms-discord-notifier/scripts/run-digest.sh
 ```
 
+## Deadline reminders
+
+Every poll cycle also reads the calendar agenda (current + next week) and pings you when a submission
+is close and still open:
+
+- **first ping** `REMINDER_LEAD_HOURS` (default **6**) before the deadline
+- **repeat every** `REMINDER_REPEAT_MINUTES` (default **40**) while it is still not submitted
+- **stops** `REMINDER_AFTER_DUE_HOURS` (default **3**) after the deadline passes, or as soon as the
+  calendar reports it submitted
+
+Pings are a real `@mention` plus an embed: headline (`⏰ Due in 4h 12m` → `⚠️ Overdue by 20m`), the
+assignment, the course, the exact local due time, and a link into eLMS. Colour goes blurple → amber
+inside the last hour → red when overdue.
+
+State lives in `data/reminders.json`, so a restart does not re-ping something it already pinged and a
+submitted item is retired automatically (it restarts if a teacher reopens it).
+
+Inspect without posting:
+
+```bash
+node src/poll.js --test-reminders
+```
+
+Set `DISCORD_USER_ID` in `.env` (right-click your profile → Copy User ID) or pings are skipped.
+
 ## How it works
 
 - **Platform**: the target is Neo LMS (CYPHER Learning). Its REST API (`/api/v1`, `/api/v3`) requires an admin-installed app and an API key, so a student account cannot use it — this tool scrapes the notification list instead.

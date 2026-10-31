@@ -13,6 +13,7 @@ const { cfg, ensureDirs } = require('./config');
 const { openSession, saveCookies } = require('./browser');
 const { readNotifications, silentReauth, loadState, saveState } = require('./notifications');
 const { postItems, postOne, alertOnce } = require('./discord');
+const { collectDeadlines, dueReminders, sendReminders, loadStore, saveStore } = require('./reminders');
 
 const MODE = process.argv[2] || '';
 const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not restore it. Note that the LMS allows only ONE active session per account, so signing in on your phone or another browser logs the bridge out (and vice versa). Re-run \`npm run setup -- --login-only\`, or refresh ${cfg.cookiesFile}.`;
@@ -25,6 +26,7 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
   let result;
   let reauth = null;
   let cookieCount = 0;
+  let deadlines = null;
   try {
     result = await readNotifications(page);
     if (!result.loggedIn) {
@@ -38,7 +40,13 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
       }
     }
     // never overwrite a good jar with the cookies of a logged-out page
-    if (result.loggedIn) cookieCount = await saveCookies(ctx);
+    if (result.loggedIn) {
+      cookieCount = await saveCookies(ctx);
+      deadlines = await collectDeadlines(page).catch((e) => {
+        console.error('deadline scrape failed:', e.message);
+        return null;
+      });
+    }
   } finally {
     await browser.close();
   }
@@ -51,6 +59,26 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
   if (MODE === '--check') {
     console.log(JSON.stringify({ loggedIn: result.loggedIn, url: result.url, reauth: reauth && reauth.url, seen: state.seen.length }));
     process.exit(result.loggedIn ? 0 : 3);
+  }
+
+  if (MODE === '--test-reminders') {
+    if (!deadlines) { console.error('no deadline data scraped'); process.exit(1); }
+    const now = Date.now();
+    for (const d of deadlines) {
+      const hrs = ((d.dueAt - now) / 3600000).toFixed(1);
+      console.log(`${d.submitted ? 'submitted' : 'OPEN     '} ${new Date(d.dueAt).toISOString()} (${hrs}h)  ${d.course} :: ${d.item}`);
+    }
+    const preview = dueReminders(deadlines, JSON.parse(JSON.stringify(loadStore())), now);
+    console.log(JSON.stringify({
+      deadlines: deadlines.length,
+      open: deadlines.filter((d) => !d.submitted).length,
+      wouldPingNow: preview.map((a) => `${a.kind}:${a.item}`),
+      leadHours: cfg.reminderLeadHours,
+      repeatMinutes: cfg.reminderRepeatMinutes,
+      afterDueHours: cfg.reminderAfterDueHours,
+      pingUser: cfg.discordUserId || '(not set - no ping)',
+    }, null, 1));
+    process.exit(0);
   }
 
   if (!result.loggedIn) {
@@ -91,11 +119,24 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
   state.alertHash = null;
   saveState(state);
 
+  // deadline reminders run on the same cycle and the same session
+  let reminderPosts = [];
+  if (deadlines && cfg.discordUserId) {
+    const store = loadStore();
+    const actions = dueReminders(deadlines, store);
+    saveStore(store);
+    if (actions.length) reminderPosts = await sendReminders(actions);
+  } else if (deadlines && !cfg.discordUserId) {
+    console.error('DISCORD_USER_ID not set - deadline reminders disabled');
+  }
+
   console.log(JSON.stringify({
     scanned: items.length,
     new: fresh.length,
     posted,
     skipped: Math.max(0, fresh.length - posted),
+    deadlines: deadlines ? deadlines.length : 0,
+    reminders: reminderPosts.length,
     at: state.lastPoll,
   }));
 })().catch(async (e) => {

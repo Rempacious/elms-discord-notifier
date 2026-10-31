@@ -268,4 +268,14 @@ async function postContainers(containers) {
   return chunks;
 }
 
-module.exports = { postItems, postOne, postText, postFile, postContainers, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };
+/** Classic embed with a real @mention in the content, so the ping actually notifies (deadline reminders). */
+async function postMentionEmbed(embed, userId) {
+  const payload = {
+    embeds: [embed],
+    allowed_mentions: { parse: [], users: userId ? [userId] : [] },
+  };
+  if (userId) payload.content = `<@${userId}>`;
+  return send(payload);
+}
+
+module.exports = { postItems, postOne, postText, postFile, postContainers, postMentionEmbed, alertOnce, classify, parseSubject, parseWhen, embedFor, containerFor };

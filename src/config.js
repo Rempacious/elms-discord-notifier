@@ -39,6 +39,11 @@ const cfg = {
   keepSeen: num(ENV.SEEN_HISTORY, 800),
   timeoutMs: num(ENV.PAGE_TIMEOUT_MS, 60000),
   headless: ENV.HEADLESS !== 'false',
+  // deadline reminders
+  reminderLeadHours: num(ENV.REMINDER_LEAD_HOURS, 6),
+  reminderRepeatMinutes: num(ENV.REMINDER_REPEAT_MINUTES, 40),
+  reminderAfterDueHours: num(ENV.REMINDER_AFTER_DUE_HOURS, 3),
+  discordUserId: ENV.DISCORD_USER_ID || '',
   cookiesFile: path.join(DATA, 'cookies.json'),
   stateFile: path.join(DATA, 'state.json'),
   logFile: path.join(ROOT, 'logs', 'poll.log'),
