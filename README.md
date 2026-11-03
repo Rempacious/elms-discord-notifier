@@ -155,6 +155,31 @@ node src/poll.js --test-reminders
 
 Set `DISCORD_USER_ID` in `.env` (right-click your profile → Copy User ID) or pings are skipped.
 
+## Unattended re-login (optional)
+
+By default the bridge renews an expired LMS session with the saved identity-provider cookies, which
+works silently — until the Microsoft session itself expires (roughly weekly at some schools). Then one
+manual sign-in is needed.
+
+Add these to `.env` and the poller can walk the whole SSO flow by itself:
+
+```
+ELMS_USER=you@school.edu
+ELMS_PASSWORD=…
+ELMS_TOTP_SECRET=JBSWY3DPEHPK3PXP     # base32 seed or otpauth:// URI
+```
+
+The TOTP implementation is validated against the RFC 6238 test vectors:
+
+```bash
+node src/auto-login.js          # 3/3 vectors passed
+node src/auto-login.js --run    # perform a real login now (visible browser) and save cookies
+```
+
+Note what this trades: the password sits in `.env` on the machine that runs the poller. If you would
+rather not store it, leave the three keys empty and accept an occasional manual re-login; the bridge
+will alert you (at most once per 6h) instead of guessing.
+
 ## How it works
 
 - **Platform**: the target is Neo LMS (CYPHER Learning). Its REST API (`/api/v1`, `/api/v3`) requires an admin-installed app and an API key, so a student account cannot use it — this tool scrapes the notification list instead.

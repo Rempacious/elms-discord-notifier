@@ -14,6 +14,7 @@ const { openSession, saveCookies } = require('./browser');
 const { readNotifications, silentReauth, loadState, saveState } = require('./notifications');
 const { postItems, postOne, alertOnce } = require('./discord');
 const { collectDeadlines, dueReminders, sendReminders, loadStore, saveStore } = require('./reminders');
+const { autoLogin } = require('./auto-login');
 
 const MODE = process.argv[2] || '';
 const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not restore it. Note that the LMS allows only ONE active session per account, so signing in on your phone or another browser logs the bridge out (and vice versa). Re-run \`npm run setup -- --login-only\`, or refresh ${cfg.cookiesFile}.`;
@@ -37,6 +38,16 @@ const REAUTH_HINT = `eLMS session expired and the silent sign-in bounce did not 
         await page.waitForTimeout(2000);
         reauth = await silentReauth(page);
         result = await readNotifications(page);
+      }
+      // still out? do a full unattended SSO login if credentials were configured
+      if (!result.loggedIn && cfg.env.ELMS_USER && cfg.env.ELMS_PASSWORD) {
+        try {
+          const al = await autoLogin(page);
+          console.error('[auto-login]', al.ok ? 'succeeded' : 'failed', '|', al.log.slice(-1)[0]);
+          if (al.ok) result = await readNotifications(page);
+        } catch (e) {
+          console.error('[auto-login] error:', e.message);
+        }
       }
     }
     // never overwrite a good jar with the cookies of a logged-out page
