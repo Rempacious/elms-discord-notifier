@@ -125,6 +125,51 @@ function fmtDate(d) {
 }
 
 // ---------- native (mobile-first) components ----------
+const MAX_MESSAGE_COMPONENTS = 38;   // Discord's hard ceiling is 40 components per message
+const ITEMS_PER_CONTAINER = 6;
+
+function compCount(node) {
+  if (!node) return 0;
+  if (node.type === 1) return 1 + (node.components || []).length;              // action row + buttons
+  if (node.type === 17) return 1 + (node.components || []).reduce((n, c) => n + compCount(c), 0);
+  return 1;
+}
+
+function chunk(list, size) {
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out.length ? out : [[]];
+}
+
+/** Pack containers into messages that stay under Discord's component ceiling. */
+function packMessages(containers) {
+  const msgs = [];
+  let cur = [];
+  let n = 0;
+  for (const c of containers) {
+    const cn = compCount(c);
+    if (cur.length && n + cn > MAX_MESSAGE_COMPONENTS) { msgs.push(cur); cur = []; n = 0; }
+    cur.push(c);
+    n += cn;
+    if (n >= MAX_MESSAGE_COMPONENTS) { msgs.push(cur); cur = []; n = 0; }
+  }
+  if (cur.length) msgs.push(cur);
+  return msgs;
+}
+
+function sectionContainers({ title, accent, rows, empty, build, more }) {
+  const groups = chunk(rows, ITEMS_PER_CONTAINER);
+  return groups.map((group, gi) => {
+    const comps = [{ type: 10, content: gi === 0 ? title : `${title} \u00b7 ${more(gi)}` }];
+    if (!rows.length) comps.push({ type: 10, content: empty });
+    group.forEach((r, i) => {
+      if (i) comps.push({ type: 14, divider: true, spacing: 1 });
+      for (const block of build(r)) comps.push(block);
+    });
+    return { type: 17, accent_color: accent, components: comps };
+  });
+}
+
 function digestContainers({ schedule, work, weekLabel, generated }) {
   const head = {
     type: 17,
@@ -136,32 +181,34 @@ function digestContainers({ schedule, work, weekLabel, generated }) {
     ],
   };
 
-  const sched = {
-    type: 17,
-    accent_color: 0xf5a623,
-    components: [{ type: 10, content: '### ⏰ Next 7 days' }],
-  };
-  if (!schedule.length) sched.components.push({ type: 10, content: '-# nothing due — clear week 🎉' });
-  schedule.forEach((r, i) => {
-    if (i) sched.components.push({ type: 14, divider: true, spacing: 1 });
-    const status = r.status === 'done' ? '✅ submitted' : '⏳ not submitted';
-    sched.components.push({ type: 10, content: `**${r.day}** · ${r.time || '—'} · ${status}` });
-    sched.components.push({ type: 10, content: `${r.course}\n-# ${r.item}` });
+  const sched = sectionContainers({
+    title: '### ⏰ Next 7 days',
+    accent: 0xf5a623,
+    rows: schedule,
+    empty: '-# nothing due — clear week 🎉',
+    more: (gi) => `part ${gi + 1}`,
+    build: (r) => {
+      const status = r.status === 'done' ? '✅ submitted' : '⏳ not submitted';
+      return [
+        { type: 10, content: `**${r.day}** · ${r.time || '—'} · ${status}` },
+        { type: 10, content: `${r.course}\n-# ${r.item}` },
+      ];
+    },
   });
 
-  const open = {
-    type: 17,
-    accent_color: 0x9b59b6,
-    components: [{ type: 10, content: '### 📋 Open work' }],
-  };
-  if (!work.length) open.components.push({ type: 10, content: '-# nothing outstanding 🎉' });
-  work.forEach((r, i) => {
-    if (i) open.components.push({ type: 14, divider: true, spacing: 1 });
-    open.components.push({ type: 10, content: `**${r.course}** · due ${r.due || '—'} · ${(r.score || '?').replace('?/', '? / ')}` });
-    open.components.push({ type: 10, content: `-# ${r.title}${r.section ? ` · ${r.section}` : ''}` });
+  const open = sectionContainers({
+    title: '### 📋 Open work',
+    accent: 0x9b59b6,
+    rows: work,
+    empty: '-# nothing outstanding 🎉',
+    more: (gi) => `part ${gi + 1}`,
+    build: (r) => [
+      { type: 10, content: `**${r.course}** · due ${r.due || '—'} · ${(r.score || '?').replace('?/', '? / ')}` },
+      { type: 10, content: `-# ${r.title}${r.section ? ` · ${r.section}` : ''}` },
+    ],
   });
 
-  return [head, sched, open];
+  return [head, ...sched, ...open];
 }
 
 // ---------- rendering ----------
@@ -238,7 +285,7 @@ function textTable(schedule, work) {
 }
 
 // ---------- main ----------
-(async () => {
+async function main() {
   ensureDirs();
   const { browser, ctx, page } = await openSession();
   let digest;
@@ -298,12 +345,25 @@ function textTable(schedule, work) {
     const containers = digestContainers({
       schedule: digest.schedule, work: digest.work, weekLabel: digest.weekLabel, generated,
     });
-    if (DRY) { console.log(JSON.stringify(containers, null, 1)); return; }
-    const msgs = await postContainers(containers);
+    const groups = packMessages(containers);
+    if (DRY) {
+      console.log(JSON.stringify({
+        containers: containers.length,
+        messages: groups.length,
+        componentsPerMessage: groups.map((g) => g.reduce((n, c) => n + compCount(c), 0)),
+      }, null, 1));
+      return;
+    }
+    const ids = [];
+    for (const group of groups) {
+      const res = await postContainers(group);
+      ids.push(...res.map((m) => m && m.id));
+    }
     console.log(JSON.stringify({
-      posted: msgs.map((m) => m && m.id),
+      posted: ids,
       events: digest.schedule.length,
       open: digest.work.length,
+      messages: groups.length,
       mode: 'components',
     }));
     return;
@@ -335,4 +395,10 @@ function textTable(schedule, work) {
     timestamp: new Date().toISOString(),
   });
   console.log(JSON.stringify({ posted: msg && msg.id, events: digest.schedule.length, open: digest.work.length, png: shotPath }));
-})().catch((e) => { console.error('ERR', e.message); process.exit(1); });
+}
+
+if (require.main === module) {
+  main().catch((e) => { console.error('ERR', e.message); process.exit(1); });
+}
+
+module.exports = { digestContainers, packMessages, compCount, html };
