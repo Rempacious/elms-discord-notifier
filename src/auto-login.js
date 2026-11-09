@@ -78,13 +78,17 @@ async function clickTileFor(page, user) {
 }
 
 async function clickText(page, re) {
-  return page.evaluate((pattern) => {
-    const rx = new RegExp(pattern, 'i');
-    const el = [...document.querySelectorAll('a,button,input')].find((e) => rx.test((e.textContent || '') + (e.value || '')));
-    if (!el) return false;
-    el.click();
-    return true;
-  }, re.source);
+  try {
+    return await page.evaluate((pattern) => {
+      const rx = new RegExp(pattern, 'i');
+      const el = [...document.querySelectorAll('a,button,input')].find((e) => rx.test((e.textContent || '') + (e.value || '')));
+      if (!el) return false;
+      el.click();
+      return true;
+    }, re.source);
+  } catch {
+    return false;   // page navigated under us - caller retries
+  }
 }
 
 /**
@@ -147,12 +151,25 @@ async function autoLogin(page, { user, password, totpSecret } = {}) {
   }
 
   // authenticator upsell
-  await clickText(page, /skip for now/);
-  await sleep(2500);
+  const settle = async () => { await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => { }); };
+  const retry = async (fn, attempts = 3) => {
+    for (let i = 0; i < attempts; i++) {
+      try { const r = await fn(); if (r) return r; } catch { /* context destroyed mid-navigation */ }
+      await sleep(1500);
+      await settle();
+    }
+    return null;
+  };
+
+  await settle();
+  await retry(() => clickText(page, /skip for now/));
+  await sleep(2000);
+  await settle();
 
   // "stay signed in?" - always yes, it is what keeps the next re-auth silent
-  if (await page.evaluate(() => /Stay signed in\?/i.test(document.body.innerText))) {
-    await page.click('#idSIButton9').catch(() => { });
+  const kmsi = await retry(() => page.evaluate(() => /Stay signed in\?/i.test(document.body.innerText)), 2);
+  if (kmsi) {
+    await retry(() => page.click('#idSIButton9').then(() => true));
     await sleep(6000);
     step('kmsi accepted');
   }
